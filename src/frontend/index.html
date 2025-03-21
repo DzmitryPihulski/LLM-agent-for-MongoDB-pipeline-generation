@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MongoDB Pipeline Explorer</title>
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --primary-dark: #388E3C;
+            --secondary: #2196F3;
+            --background: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --border: #e0e0e0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: var(--primary-dark);
+            margin-bottom: 10px;
+        }
+        
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .input-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .input-section input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        .button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        
+        .button:hover {
+            background-color: var(--primary-dark);
+        }
+        
+        .result-card {
+            margin-top: 20px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--primary-dark);
+        }
+        
+        .result-section {
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+        
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            font-size: 14px;
+        }
+        
+        code {
+            color: #333;
+        }
+        
+        .pipeline-stages {
+            margin-top: 20px;
+        }
+        
+        .stage {
+            background-color: #f5f5f5;
+            border-left: 4px solid var(--secondary);
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .stage-header {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary);
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .results-container {
+            display: none;
+        }
+        
+        /* JSON pretty print colors */
+        .json-key {
+            color: #7B1FA2;
+            font-weight: bold;
+        }
+        .json-string {
+            color: #2E7D32;
+        }
+        .json-number {
+            color: #D32F2F;
+        }
+        .json-boolean {
+            color: #0277BD;
+        }
+        .json-null {
+            color: #757575;
+        }
+        
+        /* Database selector styling */
+        .database-section {
+            margin-bottom: 15px;
+        }
+        
+        select {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background-color: white;
+            font-size: 16px;
+            width: 100%;
+            cursor: pointer;
+        }
+        
+        .refresh-button {
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .refresh-button:hover {
+            background-color: #1976D2;
+        }
+        
+        .refresh-icon {
+            width: 18px;
+            height: 18px;
+        }
+        
+        .database-loading {
+            display: inline-block;
+            margin-left: 10px;
+            color: var(--secondary);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MongoDB Pipeline Explorer</h1>
+            <p>Enter your query to analyze MongoDB pipeline stages and results</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Select Model</div>
+            <select id="modelname">
+                <option value="Mistral">Mistral</option>
+                <option value="Deepseek">DeepSeek</option>
+                <option value="OpenAI">OpenAI</option>
+            </select>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">Select Database</div>
+            <div class="database-section">
+                <div class="input-section">
+                    <select id="databaseSelect">
+                        <option value="">Loading databases...</option>
+                    </select>
+                    <button class="refresh-button" id="refreshDatabases" title="Refresh database list">
+                        <svg class="refresh-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M23 4v6h-6"></path>
+                            <path d="M1 20v-6h6"></path>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 4"></path>
+                            <path d="M1 20l4.64-4.64A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="databaseLoading" class="database-loading">Loading databases...</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">Enter Your Query</div>
+            <div class="input-section">
+                <input type="text" id="queryInput" placeholder="e.g., Show me transactions prior to each customer" />
+                <button class="button" id="submitButton">Execute</button>
+            </div>
+        </div>
+        
+        <div id="loadingIndicator" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Processing your query...</p>
+        </div>
+        
+        <div id="errorMessage" class="error-message"></div>
+        
+        <div id="resultsContainer" class="results-container">
+            <div class="card">
+                <div class="card-title">Your Query</div>
+                <div class="result-section">
+                    <pre><code id="queryDisplay"></code></pre>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Collection</div>
+                <div class="result-section">
+                    <pre><code id="collectionDisplay"></code></pre>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Aggregation Pipeline</div>
+                <div id="pipelineStages" class="pipeline-stages"></div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Results</div>
+                <div class="result-section">
+                    <pre><code id="resultsDisplay"></code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const databaseSelect = document.getElementById('databaseSelect');
+            const modelname = document.getElementById('modelname');
+            const refreshDatabases = document.getElementById('refreshDatabases');
+            const databaseLoading = document.getElementById('databaseLoading');
+            const queryInput = document.getElementById('queryInput');
+            const submitButton = document.getElementById('submitButton');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const errorMessage = document.getElementById('errorMessage');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const queryDisplay = document.getElementById('queryDisplay');
+            const collectionDisplay = document.getElementById('collectionDisplay');
+            const pipelineStages = document.getElementById('pipelineStages');
+            const resultsDisplay = document.getElementById('resultsDisplay');
+            
+            // Load databases on page load
+            fetchDatabases();
+            
+            // Refresh databases button
+            refreshDatabases.addEventListener('click', fetchDatabases);
+            
+            // Execute query button
+            submitButton.addEventListener('click', executeQuery);
+            
+            // Enter key in query input
+            queryInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    executeQuery();
+                }
+            });
+            
+            // Fetch databases from endpoint
+            function fetchDatabases() {
+                databaseSelect.innerHTML = '<option value="">Loading databases...</option>';
+                databaseSelect.disabled = true;
+                databaseLoading.style.display = 'inline-block';
+                
+                fetch('http://localhost:1234/get_the_db_names', {
+                    method: 'GET',
+                    headers: {
+                        'accept': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(databases => {
+                    databaseSelect.innerHTML = '';
+                    
+                    if (databases && Array.isArray(databases) && databases.length > 0) {
+                        databases.forEach(db => {
+                            const option = document.createElement('option');
+                            option.value = db;
+                            option.textContent = db;
+                            databaseSelect.appendChild(option);
+                        });
+                    } else {
+                        const option = document.createElement('option');
+                        option.value = '';
+                        option.textContent = 'No databases available';
+                        databaseSelect.appendChild(option);
+                    }
+                    
+                    databaseSelect.disabled = false;
+                    databaseLoading.style.display = 'none';
+                })
+                .catch(error => {
+                    databaseSelect.innerHTML = '<option value="">Error loading databases</option>';
+                    databaseSelect.disabled = false;
+                    databaseLoading.style.display = 'none';
+                    showError(`Failed to load databases: ${error.message}`);
+                });
+            }
+            
+            // Execute query
+            function executeQuery() {
+                const query = queryInput.value.trim();
+                const selectedDatabase = databaseSelect.value;
+                const selectedModel = modelname.value;
+                
+                if (!query) {
+                    showError('Please enter a query');
+                    return;
+                }
+                
+                if (!selectedDatabase) {
+                    showError('Please select a database');
+                    return;
+                }
+
+                if (!selectedModel) {
+                    showError('Please select a model');
+                    return;
+                }
+                
+                showLoading();
+                hideError();
+                
+                const requestBody = {
+                    input: {
+                        human_input: query,
+                        database: selectedDatabase,
+                        model_name: selectedModel
+                    },
+                    config: {},
+                    kwargs: {}
+                };
+                
+                fetch('http://localhost:1234/invoke', {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    hideLoading();
+                    displayResults(data, query, selectedDatabase);
+                })
+                .catch(error => {
+                    hideLoading();
+                    showError(`Error: ${error.message}`);
+                });
+            }
+            
+            // Display results
+            function displayResults(data, query, database) {
+                try {
+                    // Extract data
+                    const toolOutput = data.output.answer.tool_output;
+                    const collection = data.output.answer.collection;
+                    const pipeline = data.output.answer.aggregation_pipeline;
+                    
+                    // Display query
+                    queryDisplay.textContent = `${query} (Database: ${database})`;
+                    
+                    // Display collection
+                    collectionDisplay.textContent = collection || 'Not specified';
+                    
+                    // Display pipeline stages
+                    pipelineStages.innerHTML = '';
+                    if (pipeline && Array.isArray(pipeline)) {
+                        pipeline.forEach((stage, index) => {
+                            const stageElement = document.createElement('div');
+                            stageElement.className = 'stage';
+                            
+                            const stageHeader = document.createElement('div');
+                            stageHeader.className = 'stage-header';
+                            stageHeader.textContent = `Stage ${index + 1}`;
+                            
+                            const stageContent = document.createElement('pre');
+                            stageContent.innerHTML = formatJson(JSON.stringify(stage, null, 2));
+                            
+                            stageElement.appendChild(stageHeader);
+                            stageElement.appendChild(stageContent);
+                            pipelineStages.appendChild(stageElement);
+                        });
+                    } else {
+                        pipelineStages.innerHTML = '<p>No pipeline stages available</p>';
+                    }
+                    
+                    // Display results - safer approach for large JSON
+                    if (toolOutput && Array.isArray(toolOutput)) {
+                        resultsDisplay.innerHTML = formatJson(JSON.stringify(toolOutput, null, 2));
+                    } else {
+                        resultsDisplay.textContent = 'No results available';
+                    }
+                    
+                    // Show results container
+                    resultsContainer.style.display = 'block';
+                } catch (error) {
+                    showError(`Error processing results: ${error.message}`);
+                }
+            }
+            
+            // Safer JSON formatting function that doesn't use recursive calls
+            function formatJson(jsonString) {
+                if (!jsonString) return '';
+                
+                // Replace with HTML entities to avoid XSS
+                let formatted = jsonString
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                
+                // Apply syntax highlighting with simple regex replacements
+                // This is less fancy but much more performant for large JSON
+                formatted = formatted
+                    // Handle strings - both keys and values
+                    .replace(/"([^"]+)":/g, '<span class="json-key">"$1":</span>')
+                    .replace(/: "([^"]+)"/g, ': <span class="json-string">"$1"</span>')
+                    
+                    // Handle numbers
+                    .replace(/: (-?\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
+                    
+                    // Handle booleans
+                    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                    
+                    // Handle null
+                    .replace(/: null/g, ': <span class="json-null">null</span>');
+                
+                return formatted;
+            }
+            
+            // UI helper functions
+            function showLoading() {
+                loadingIndicator.style.display = 'block';
+                resultsContainer.style.display = 'none';
+            }
+            
+            function hideLoading() {
+                loadingIndicator.style.display = 'none';
+            }
+            
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+            }
+            
+            function hideError() {
+                errorMessage.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
